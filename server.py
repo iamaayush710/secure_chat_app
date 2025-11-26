@@ -2,7 +2,6 @@
 # - Forwards newline-delimited ciphertext lines to all other clients
 # - Never decrypts or inspects payloads
 # - Optional demo logging: export CHAT_DEMO=1 to print token prefixes
-# - Port/host override with env: CHAT_HOST, CHAT_PORT
 
 import os
 import socket
