@@ -1,7 +1,7 @@
 # server.py — secure relay (line-framed)
 # - Forwards newline-delimited ciphertext lines to all other clients
 # - Never decrypts or inspects payloads
-# - Optional demo logging: export CHAT_DEMO=1 to print token prefixes
+# - Optional demo logging: export CHAT_DEMO=1 to print token prefix
 
 import os
 import socket
