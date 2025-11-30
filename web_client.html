@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Secure Chat (Web)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/scrypt-js@3.0.1/scrypt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #050915;
+      --panel: #0f172a;
+      --panel-2: #0b1020;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #22c55e;
+      --accent-2: #10b981;
+      --danger: #ef4444;
+      --border: #1f2937;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at 20% 20%, rgba(34,197,94,0.07), transparent 28%),
+                  radial-gradient(circle at 80% 0%, rgba(59,130,246,0.06), transparent 30%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .app {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: linear-gradient(135deg, rgba(15,23,42,0.92), rgba(5,9,21,0.92));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    header {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(90deg, rgba(34,197,94,0.18), transparent);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.5px;
+    }
+
+    .status {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .status.connected { color: var(--accent); }
+    .status.error { color: var(--danger); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 0;
+    }
+
+    .panel {
+      padding: 18px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input, select, button, textarea {
+      font-family: inherit;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    .input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    .input:focus {
+      outline: 2px solid rgba(34,197,94,0.4);
+      border-color: rgba(34,197,94,0.5);
+    }
+
+    .inline {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .button {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 15px;
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+    }
+
+    .button.primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #041008;
+      box-shadow: 0 8px 24px rgba(34,197,94,0.25);
+    }
+
+    .button.secondary {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .button:active { transform: translateY(1px); }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 8px;
+      background: rgba(34,197,94,0.12);
+      color: var(--accent);
+      border-radius: 8px;
+      font-size: 12px;
+      border: 1px solid rgba(34,197,94,0.35);
+      margin-top: 6px;
+    }
+
+    .qr-box {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .qr-video {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0b1223;
+    }
+
+    .qr-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border: 2px dashed rgba(34,197,94,0.4);
+      border-radius: 12px;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 9, 21, 0.94);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      flex-direction: column;
+      gap: 12px;
+      padding: 20px;
+    }
+
+    .overlay h3 {
+      margin: 0;
+      color: var(--text);
+      letter-spacing: 0.4px;
+    }
+
+    .overlay p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .main {
+      padding: 18px;
+      background: #060b18;
+    }
+
+    .messages {
+      height: 520px;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+
+    .bubble {
+      max-width: 70%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      margin-bottom: 10px;
+      background: #111827;
+      color: var(--text);
+      border: 1px solid var(--border);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    }
+
+    .bubble.self {
+      margin-left: auto;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #041008;
+      border: none;
+    }
+
+    .bubble .meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .bubble.self .meta { color: #06391c; }
+
+    .compose {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 120px;
+      gap: 10px;
+    }
+
+    .footnote {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .panel { border-right: none; border-bottom: 1px solid var(--border); }
+      .messages { height: 400px; }
+    }
+  </style>
+</head>
+  <body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Secure Biometric Chat · Web</h1>
+        <div class="status" id="status">Pick Create or Join to start</div>
+      </div>
+      <div id="fingerprint" class="badge">Fingerprint: —</div>
+    </header>
+
+    <div id="landing" style="padding:22px; text-align:center;">
+      <p style="color:var(--muted);font-size:14px;">Choose how you want to start.</p>
+      <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+        <button class="button primary" style="max-width:220px;" id="btnCreate">Create Room</button>
+        <button class="button secondary" style="max-width:220px;" id="btnJoin">Join Room</button>
+      </div>
+    </div>
+
+    <div id="joinWizard" style="display:none; padding:22px; border-top:1px solid var(--border); background:var(--panel);">
+      <div id="joinStepRoom">
+        <p style="margin:6px 0 12px; color:var(--muted); font-size:14px;">Enter the room code to continue.</p>
+        <div class="field" style="max-width:440px;">
+          <label for="joinRoomCode">Room Code</label>
+          <input class="input" id="joinRoomCode" placeholder="orbit maple glass dial" />
+        </div>
+        <div class="field" style="max-width:440px;">
+          <label for="joinWsUrl">WebSocket Relay URL (optional)</label>
+          <input class="input" id="joinWsUrl" placeholder="wss://example.com:8765" />
+        </div>
+        <div class="field" style="max-width:440px;">
+          <label for="joinApiUrl">API URL (optional)</label>
+          <input class="input" id="joinApiUrl" placeholder="https://example.com:8001" />
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="button primary" style="max-width:200px;" id="joinRoomNext">Continue</button>
+          <button class="button secondary" style="max-width:200px;" id="btnJoinScan">Scan QR</button>
+        </div>
+        <div class="footnote">Room codes are unique; creators must pick a fresh phrase.</div>
+      </div>
+      <div id="joinStepUser" style="display:none;">
+        <p id="joinRoomSummary" style="margin:6px 0 12px; color:var(--muted); font-size:14px;"></p>
+        <div class="field" style="max-width:440px;">
+          <label for="joinUsername">Username (unique per room)</label>
+          <input class="input" id="joinUsername" placeholder="choose a handle" />
+        </div>
+        <div class="footnote" id="joinUserHint">We will check availability, then ask for your passkey (biometric if available, password/PIN otherwise).</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="button secondary" style="max-width:200px;" id="joinUserBack">Back</button>
+          <button class="button primary" style="max-width:200px;" id="joinUserNext">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" id="appGrid" style="display:none;">
+      <aside class="panel" id="sidebar">
+        <h2 id="formTitle">Connect</h2>
+        <div class="field">
+          <label for="host">Relay Host</label>
+          <input class="input" id="host" value="localhost" />
+        </div>
+        <div class="inline">
+          <div class="field">
+            <label for="scheme">Scheme</label>
+            <select class="input" id="scheme">
+              <option value="ws">ws://</option>
+              <option value="wss">wss://</option>
+            </select>
+        </div>
+        <div class="field">
+          <label for="port">Port</label>
+          <input class="input" id="port" value="8765" />
+        </div>
+      </div>
+        <div class="field">
+          <label for="wsBase">WebSocket URL (override)</label>
+          <input class="input" id="wsBase" placeholder="wss://example.com:8765" />
+        </div>
+        <div class="field">
+          <label for="apiHost">API Host (FastAPI/WebAuthn)</label>
+          <input class="input" id="apiHost" placeholder="use relay host by default" />
+        </div>
+        <div class="field">
+          <label for="apiPort">API Port (FastAPI)</label>
+          <input class="input" id="apiPort" value="8001" />
+        </div>
+        <div class="field">
+          <label for="apiBase">API URL (override)</label>
+          <input class="input" id="apiBase" placeholder="https://example.com:8001" />
+        </div>
+        <div class="field">
+          <label for="room">Room Code</label>
+          <input class="input" id="room" placeholder="orbit maple glass dial" />
+        </div>
+        <div class="field">
+          <label for="name">Display Name</label>
+          <input class="input" id="name" placeholder="anonymous_user_1693432000" />
+        </div>
+
+        <div class="inline">
+          <button class="button primary" id="connectBtn">Connect</button>
+          <button class="button secondary" id="disconnectBtn">Disconnect</button>
+        </div>
+        <div class="footnote">
+          Keep this page local or serve it over HTTPS. The relay sees only ciphertext tokens.
+        </div>
+      </aside>
+
+      <main class="main">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div></div>
+          <button class="button secondary" id="lockBtn" style="display:none; max-width:140px;">Lock Room</button>
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="compose">
+          <input class="input" id="messageInput" placeholder="Type a message and press Enter…" />
+          <button class="button primary" id="sendBtn">Send</button>
+        </div>
+        <div class="footnote">
+          Security design: scrypt(room_code) → AES-256-GCM key · header binds sender + counter + nonce · per-sender replay protection.
+        </div>
+      </main>
+    </div>
+
+    <div class="overlay" id="scanOverlay">
+      <h3>Scan QR to Join</h3>
+      <p>Show the QR code; scanning auto-connects.</p>
+      <div class="qr-box" style="max-width:520px; width:90%;">
+        <video id="qrVideo" class="qr-video" muted playsinline></video>
+        <div class="qr-overlay"></div>
+      </div>
+      <button class="button secondary" style="max-width:200px;" id="cancelScanBtn">Cancel</button>
+    </div>
+
+    <div class="overlay" id="loadingOverlay">
+      <h3>Connecting…</h3>
+      <p>Please wait while we establish the secure channel.</p>
+    </div>
+  </div>
+
+  <script>
+    const MAGIC = new Uint8Array([0x53, 0x43, 0x31]); // "SC1"
+    const NONCE_LEN = 12;
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const SEND_COUNTER_KEY = 'sc_send_counter_v1';
+
+    const state = {
+      ws: null,
+      key: null,
+      keyBytes: null,
+      username: "",
+      roomCode: "",
+      sendCounter: 0,
+      recvSeen: new Map(),
+      token: null,
+      isAdmin: false,
+      locked: false,
+    };
+
+    const statusEl = document.getElementById('status');
+    const fingerprintEl = document.getElementById('fingerprint');
+    const messagesEl = document.getElementById('messages');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const btnCreate = document.getElementById('btnCreate');
+    const btnJoin = document.getElementById('btnJoin');
+    const landing = document.getElementById('landing');
+    const appGrid = document.getElementById('appGrid');
+    const formTitle = document.getElementById('formTitle');
+    const btnJoinScan = document.getElementById('btnJoinScan');
+    const joinWizard = document.getElementById('joinWizard');
+    const joinStepRoom = document.getElementById('joinStepRoom');
+    const joinStepUser = document.getElementById('joinStepUser');
+    const joinRoomCodeInput = document.getElementById('joinRoomCode');
+    const joinWsUrlInput = document.getElementById('joinWsUrl');
+    const joinApiUrlInput = document.getElementById('joinApiUrl');
+    const joinRoomNext = document.getElementById('joinRoomNext');
+    const joinRoomSummary = document.getElementById('joinRoomSummary');
+    const joinUsernameInput = document.getElementById('joinUsername');
+    const joinUserHint = document.getElementById('joinUserHint');
+    const joinUserNext = document.getElementById('joinUserNext');
+    const joinUserBack = document.getElementById('joinUserBack');
+    const apiHostInput = document.getElementById('apiHost');
+    const apiPortInput = document.getElementById('apiPort');
+    const apiBaseInput = document.getElementById('apiBase');
+    const wsBaseInput = document.getElementById('wsBase');
+    const lockBtn = document.getElementById('lockBtn');
+    const qrVideo = document.getElementById('qrVideo');
+    const sidebar = document.getElementById('sidebar');
+    const scanOverlay = document.getElementById('scanOverlay');
+    const cancelScanBtn = document.getElementById('cancelScanBtn');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    let qrScanner = null;
+    let currentMode = null; // "create" | "join"
+    let pendingJoinRoom = "";
+    let pendingJoinUsername = "";
+
+    function setStatus(text, cls = '') {
+      statusEl.textContent = text;
+      statusEl.className = `status ${cls}`;
+    }
+
+    function addBubble(text, meta, fromSelf) {
+      const wrap = document.createElement('div');
+      wrap.className = `bubble ${fromSelf ? 'self' : ''}`;
+      wrap.innerHTML = `<div>${text}</div><div class="meta"><span>${meta}</span><span>${fromSelf ? 'you' : ''}</span></div>`;
+      messagesEl.appendChild(wrap);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addSystem(text) {
+      const wrap = document.createElement('div');
+      wrap.className = 'bubble';
+      wrap.style.background = '#0b1223';
+      wrap.style.border = '1px dashed var(--border)';
+      wrap.innerHTML = `<div style="color:var(--muted);font-size:13px;">${text}</div>`;
+      messagesEl.appendChild(wrap);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function isStrongRoomCode(room) {
+      if (!room) return false;
+      const longEnough = room.length >= 16;
+      const wordy = room.split(/\s+/).filter(w => w.length >= 3).length >= 4;
+      const hasMix = /[a-z]/.test(room) && /[A-Z]/.test(room);
+      const hasDigit = /\d/.test(room);
+      return wordy || (longEnough && (hasMix || hasDigit));
+    }
+
+    async function sha256(bytes) {
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      return new Uint8Array(digest);
+    }
+
+    function toHex(bytes, len = 12) {
+      return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, len);
+    }
+
+    function concatBytes(a, b) {
+      const out = new Uint8Array(a.length + b.length);
+      out.set(a, 0);
+      out.set(b, a.length);
+      return out;
+    }
+
+    function getSendCounterKey(room, user) {
+      return `${SEND_COUNTER_KEY}:${room}:${user}`;
+    }
+
+    function loadSendCounter(room, user) {
+      try {
+        const raw = localStorage.getItem(getSendCounterKey(room, user));
+        const num = raw ? parseInt(raw, 10) : 0;
+        return Number.isFinite(num) && num > 0 ? num : 0;
+      } catch (_) {
+        return 0;
+      }
+    }
+
+    function persistSendCounter(room, user, value) {
+      try {
+        localStorage.setItem(getSendCounterKey(room, user), String(value));
+      } catch (_) {
+        // ignore storage failures
+      }
+    }
+
+    function base64UrlEncode(bytes) {
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function base64UrlDecode(str) {
+      const pad = '='.repeat((4 - (str.length % 4)) % 4);
+      const b64 = str.replace(/-/g, '+').replace(/_/g, '/') + pad;
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+
+    function toArrayBuffer(u8) {
+      return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+    }
+
+    function decodePublicKeyOptions(opts) {
+      const o = JSON.parse(JSON.stringify(opts));
+      o.challenge = toArrayBuffer(base64UrlDecode(o.challenge));
+      if (o.user && o.user.id) {
+        o.user.id = toArrayBuffer(base64UrlDecode(o.user.id));
+      }
+      if (o.allowCredentials) {
+        o.allowCredentials = o.allowCredentials.map((c) => ({
+          ...c,
+          id: toArrayBuffer(base64UrlDecode(c.id)),
+        }));
+      }
+      return o;
+    }
+
+    function normalizeUrl(url) {
+      return url.replace(/\/+$/, '');
+    }
+
+    function getApiBase() {
+      const override = (apiBaseInput.value || '').trim() || (joinApiUrlInput.value || '').trim();
+      if (override) return normalizeUrl(override);
+      const scheme = (document.getElementById('scheme').value === 'wss') ? 'https' : 'http';
+      const host = apiHostInput.value.trim() || document.getElementById('host').value.trim();
+      const port = apiPortInput.value.trim() || '8001';
+      return `${scheme}://${host}:${port}`;
+    }
+
+    function getWsBase() {
+      const override = (wsBaseInput.value || '').trim() || (joinWsUrlInput.value || '').trim();
+      if (override) return normalizeUrl(override);
+      const scheme = document.getElementById('scheme').value;
+      const host = document.getElementById('host').value.trim();
+      const port = document.getElementById('port').value.trim();
+      return `${scheme}://${host}:${port}`;
+    }
+
+    function buildHeader(sender, counter, nonce) {
+      const nameBytes = encoder.encode(sender).slice(0, 255);
+      const header = new Uint8Array(3 + 1 + nameBytes.length + 8 + NONCE_LEN);
+      header.set(MAGIC, 0);
+      header[3] = nameBytes.length;
+      header.set(nameBytes, 4);
+      const view = new DataView(header.buffer);
+      view.setBigUint64(4 + nameBytes.length, BigInt(counter), false);
+      header.set(nonce, 4 + nameBytes.length + 8);
+      return header;
+    }
+
+    function parseHeader(buf) {
+      if (buf.length < 3 + 1 + 8 + NONCE_LEN) throw new Error('header too short');
+      if (buf[0] !== 0x53 || buf[1] !== 0x43 || buf[2] !== 0x31) throw new Error('bad magic');
+      const nameLen = buf[3];
+      if (buf.length < 3 + 1 + nameLen + 8 + NONCE_LEN) throw new Error('header truncated');
+      const name = decoder.decode(buf.subarray(4, 4 + nameLen));
+      const view = new DataView(buf.buffer, buf.byteOffset + 4 + nameLen, 8);
+      const counter = Number(view.getBigUint64(0, false));
+      const nonceStart = 4 + nameLen + 8;
+      const nonce = buf.subarray(nonceStart, nonceStart + NONCE_LEN);
+      return { sender: name, counter, nonce, headerLen: nonceStart + NONCE_LEN };
+    }
+
+    async function deriveRoomKey(room) {
+      const scryptFn = (window.scrypt && window.scrypt.scrypt) || window.scrypt;
+      if (typeof scryptFn !== 'function') throw new Error('scrypt-js failed to load');
+
+      const domain = encoder.encode('SecureChat v2 room key');
+      const rcBytes = encoder.encode(room);
+      const salt = await sha256(concatBytes(domain, rcBytes));
+
+      const keyBytes = await scryptFn(rcBytes, salt, 2 ** 15, 8, 2, 32);
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        keyBytes,
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt', 'decrypt']
+      );
+      const fp = toHex(await sha256(keyBytes), 12);
+      return { cryptoKey, keyBytes, fingerprint: fp };
+    }
+
+    async function encryptMessage(key, sender, counter, plaintext) {
+      const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LEN));
+      const header = buildHeader(sender, counter, nonce);
+      const cipherBytes = new Uint8Array(await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: nonce, additionalData: header, tagLength: 128 },
+        key,
+        encoder.encode(plaintext)
+      ));
+      return base64UrlEncode(concatBytes(header, cipherBytes));
+    }
+
+    async function decryptMessage(key, token) {
+      const blob = base64UrlDecode(token);
+      const { sender, counter, nonce, headerLen } = parseHeader(blob);
+      const ciphertext = blob.subarray(headerLen);
+      const plaintextBytes = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: nonce, additionalData: blob.subarray(0, headerLen), tagLength: 128 },
+        key,
+        ciphertext
+      );
+      const plaintext = decoder.decode(new Uint8Array(plaintextBytes));
+      return { sender, counter, plaintext };
+    }
+
+    function resetState() {
+      if (state.ws) {
+        state.ws.close();
+      }
+      state.ws = null;
+      state.key = null;
+      state.keyBytes = null;
+      state.sendCounter = 0;
+      state.recvSeen.clear();
+      // Keep token/admin unless explicitly cleared by caller.
+      // state.token = null;
+      // state.isAdmin = false;
+      state.locked = false;
+    }
+
+    function showCreate() {
+      currentMode = 'create';
+      landing.style.display = 'none';
+      joinWizard.style.display = 'none';
+      appGrid.style.display = 'grid';
+      sidebar.style.display = 'block';
+      formTitle.textContent = 'Create Room';
+      setStatus('Fill the form to create a room.');
+      addSystem('Mode: create a new room and share the code.');
+    }
+
+    function resetJoinFlow() {
+      pendingJoinRoom = '';
+      pendingJoinUsername = '';
+      joinRoomCodeInput.value = '';
+      joinWsUrlInput.value = '';
+      joinApiUrlInput.value = '';
+      joinUsernameInput.value = '';
+      joinRoomSummary.textContent = '';
+      joinUserHint.textContent = 'We will check availability, then ask for your passkey (biometric if available, password/PIN otherwise).';
+      joinStepRoom.style.display = 'block';
+      joinStepUser.style.display = 'none';
+    }
+
+    function showJoinStart() {
+      currentMode = 'join';
+      landing.style.display = 'none';
+      joinWizard.style.display = 'block';
+      appGrid.style.display = 'none';
+      sidebar.style.display = 'block';
+      formTitle.textContent = 'Join Room';
+      setStatus('Enter the room code to join.');
+      resetJoinFlow();
+      addSystem('Mode: join an existing room. Room + username will be checked for uniqueness.');
+    }
+
+    function showJoinScan() {
+      currentMode = 'join';
+      scanOverlay.style.display = 'flex';
+      setStatus('Scanning QR…');
+      startQrScan();
+    }
+
+    function applyConnectData(data) {
+      if (data.host) document.getElementById('host').value = data.host;
+      if (data.apiHost) apiHostInput.value = data.apiHost;
+      if (data.port) document.getElementById('port').value = data.port;
+      if (data.scheme) document.getElementById('scheme').value = data.scheme.replace('://', '');
+      if (data.room) document.getElementById('room').value = data.room;
+      if (data.name) document.getElementById('name').value = data.name;
+      if (data.name) joinUsernameInput.value = data.name;
+      if (data.room) joinRoomCodeInput.value = data.room;
+      if (data.wsUrl) {
+        wsBaseInput.value = data.wsUrl;
+        joinWsUrlInput.value = data.wsUrl;
+      }
+      if (data.apiPort) apiPortInput.value = data.apiPort;
+      if (data.apiUrl) {
+        apiBaseInput.value = data.apiUrl;
+        joinApiUrlInput.value = data.apiUrl;
+      }
+      setStatus('Filled from QR data.');
+    }
+
+    function setAdminUI() {
+      if (state.isAdmin) {
+        lockBtn.style.display = 'inline-block';
+        lockBtn.textContent = state.locked ? 'Unlock Room' : 'Lock Room';
+      } else {
+        lockBtn.style.display = 'none';
+      }
+    }
+
+    async function apiFetch(path, body) {
+      const base = getApiBase();
+      const res = await fetch(`${base}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `API error ${res.status}`);
+      }
+      return res.json();
+    }
+
+    async function fetchRoomStatus(room) {
+      try {
+        const base = getApiBase();
+        const res = await fetch(`${base}/room/${encodeURIComponent(room)}`);
+        if (!res.ok) return { locked: false, exists: false };
+        const data = await res.json();
+        data.exists = Object.prototype.hasOwnProperty.call(data, 'admin');
+        return data;
+      } catch (_) {
+        return { locked: false, exists: false };
+      }
+    }
+
+    async function checkUsernameExists(room, username) {
+      const base = getApiBase();
+      const res = await fetch(
+        `${base}/room/${encodeURIComponent(room)}/user/${encodeURIComponent(username)}`
+      );
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Username check failed');
+      }
+      const data = await res.json();
+      return !!data.exists;
+    }
+
+    async function webauthnRegister(room, username, mode = 'join') {
+      setStatus('Starting WebAuthn registration…');
+      const optsResp = await apiFetch('/register/options', { room, username, mode });
+      const publicKey = decodePublicKeyOptions(optsResp.publicKey);
+      const cred = await navigator.credentials.create({ publicKey });
+      const attObj = base64UrlEncode(new Uint8Array(cred.response.attestationObject));
+      const clientData = base64UrlEncode(new Uint8Array(cred.response.clientDataJSON));
+      const verify = await apiFetch('/register/verify', {
+        room,
+        username,
+        rawId: base64UrlEncode(new Uint8Array(cred.rawId)),
+        attestationObject: attObj,
+        clientDataJSON: clientData,
+      });
+      state.token = verify.token;
+      state.isAdmin = !!verify.admin;
+      setAdminUI();
+      return verify;
+    }
+
+    async function webauthnAssert(room, username) {
+      setStatus('Starting WebAuthn assertion…');
+      const optsResp = await apiFetch('/assert/options', { room, username });
+      const publicKey = decodePublicKeyOptions(optsResp.publicKey);
+      const cred = await navigator.credentials.get({ publicKey });
+      const authenticatorData = base64UrlEncode(new Uint8Array(cred.response.authenticatorData));
+      const clientData = base64UrlEncode(new Uint8Array(cred.response.clientDataJSON));
+      const signature = base64UrlEncode(new Uint8Array(cred.response.signature));
+      const credentialId = base64UrlEncode(new Uint8Array(cred.rawId));
+      const verify = await apiFetch('/assert/verify', {
+        room,
+        username,
+        rawId: credentialId,
+        authenticatorData,
+        clientDataJSON: clientData,
+        signature,
+        credentialId,
+      });
+      state.token = verify.token;
+      state.isAdmin = !!verify.admin;
+      setAdminUI();
+      return verify;
+    }
+
+    function isCredNotFound(err) {
+      const msg = (err && err.message) ? err.message.toLowerCase() : '';
+      return msg.includes('credential not found');
+    }
+
+    async function ensureAuth(room, username, options = {}) {
+      let { auto = false, mode = 'join', preferRegister = false } = options;
+      if (state.token) return;
+      if (!window.PublicKeyCredential) {
+        throw new Error('WebAuthn not supported in this browser');
+      }
+      if (auto) showLoading(true);
+
+      const status = await fetchRoomStatus(room);
+      const locked = !!status.locked;
+      if (mode === 'create' && status && status.exists) {
+        throw new Error('Room code already exists; choose a new one.');
+      }
+      if (locked && preferRegister) {
+        throw new Error('Room is locked; new registrations are disabled.');
+      }
+
+      // If we planned to register but this username already exists, switch to assertion.
+      if (preferRegister) {
+        try {
+          const exists = await checkUsernameExists(room, username);
+          if (exists) {
+            preferRegister = false;
+          }
+        } catch (err) {
+          // If the check fails, continue; assertion will still be attempted first.
+        }
+      }
+
+      // Try assertion first to reuse an existing passkey, unless we know we need to register.
+      if (!preferRegister) {
+        try {
+          await webauthnAssert(room, username);
+          return;
+        } catch (err) {
+          if (locked) {
+            throw err; // locked rooms must use existing passkey
+          }
+          if (!isCredNotFound(err)) {
+            throw err;
+          }
+        }
+      }
+
+      // If credential missing and room unlocked, register a new one.
+      const regMode = preferRegister ? 'join-new' : mode;
+      await webauthnRegister(room, username, regMode);
+    }
+
+    async function handleJoinRoomContinue() {
+      const room = joinRoomCodeInput.value.trim();
+      const apiUrl = joinApiUrlInput.value.trim();
+      const wsUrl = joinWsUrlInput.value.trim();
+      if (!room) {
+        setStatus('Room code required', 'error');
+        return;
+      }
+      if (apiUrl) {
+        apiBaseInput.value = apiUrl;
+      }
+      if (wsUrl) {
+        wsBaseInput.value = wsUrl;
+      }
+      const status = await fetchRoomStatus(room);
+      if (!status.exists) {
+        setStatus('Room not found. Ask the creator for the correct code.', 'error');
+        return;
+      }
+      pendingJoinRoom = room;
+      document.getElementById('room').value = room;
+      joinRoomSummary.textContent = `Room: ${room}`;
+      joinStepRoom.style.display = 'none';
+      joinStepUser.style.display = 'block';
+      setStatus('Room accepted. Choose a unique username.');
+    }
+
+    async function handleJoinUserContinue() {
+      const room = pendingJoinRoom || joinRoomCodeInput.value.trim();
+      const username = joinUsernameInput.value.trim();
+      if (!room || !username) {
+        setStatus('Room and username required', 'error');
+        return;
+      }
+      pendingJoinUsername = username;
+      document.getElementById('name').value = username;
+      let exists = false;
+      try {
+        exists = await checkUsernameExists(room, username);
+      } catch (err) {
+        setStatus(err.message || 'Username check failed', 'error');
+        return;
+      }
+      joinUserHint.textContent = exists
+        ? 'We found this username in the room. Authenticate with your passkey to join.'
+        : 'Username is available. Register a new passkey (biometric if available, password/PIN otherwise).';
+      setStatus(exists ? 'Authenticate to join this room.' : 'No account found; registering a new passkey.');
+      try {
+        await connect(true, { modeOverride: 'join', preferRegister: !exists });
+      } catch (err) {
+        setStatus(err.message || 'Join failed', 'error');
+      }
+    }
+
+    async function startQrScan() {
+      if (!window.QrScanner) {
+        setStatus('QR scanner library not loaded', 'error');
+        return;
+      }
+      if (qrScanner) {
+        await qrScanner.stop();
+        qrScanner.destroy();
+        qrScanner = null;
+      }
+      scanOverlay.style.display = 'flex';
+      qrScanner = new QrScanner(
+        qrVideo,
+        (result) => {
+          try {
+            const parsed = JSON.parse(result.data || result);
+            applyConnectData(parsed);
+          } catch (err) {
+            setStatus('Invalid QR payload', 'error');
+          }
+          stopQrScan();
+        },
+        {
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+        }
+      );
+      try {
+        await qrScanner.start();
+        qrVideo.style.display = 'block';
+        setStatus('Scanning QR…');
+      } catch (err) {
+        setStatus('Camera not available: ' + err.message, 'error');
+      }
+    }
+
+    async function stopQrScan() {
+      if (qrScanner) {
+        try { await qrScanner.stop(); } catch (_) {}
+        qrScanner.destroy();
+        qrScanner = null;
+      }
+      scanOverlay.style.display = 'none';
+    }
+
+    function showLoading(show) {
+      loadingOverlay.style.display = show ? 'flex' : 'none';
+    }
+
+    function showChatOnly() {
+      landing.style.display = 'none';
+      joinWizard.style.display = 'none';
+      scanOverlay.style.display = 'none';
+      sidebar.style.display = 'none';
+      appGrid.style.display = 'grid';
+      appGrid.style.gridTemplateColumns = '1fr';
+      setAdminUI();
+    }
+
+    async function toggleLock() {
+      if (!state.isAdmin || !state.token || !state.roomCode) return;
+      try {
+        const desired = !state.locked;
+        const res = await apiFetch('/lock', { room: state.roomCode, lock: desired, token: state.token });
+        state.locked = !!res.locked;
+        setAdminUI();
+        addSystem(`Room ${state.locked ? 'locked' : 'unlocked'} by admin.`);
+      } catch (err) {
+        setStatus(err.message || 'Lock toggle failed', 'error');
+      }
+    }
+
+    async function connect(auto = false, options = {}) {
+      const { modeOverride = currentMode || 'join', preferRegister = false } = options;
+      const mode = modeOverride || 'join';
+      const host = document.getElementById('host').value.trim();
+      const scheme = document.getElementById('scheme').value;
+      const port = document.getElementById('port').value.trim();
+      const room = document.getElementById('room').value.trim();
+      const manualName = document.getElementById('name').value.trim();
+      const name = manualName || pendingJoinUsername || `anonymous_user_${Date.now()}`;
+
+      if (!host || !port || !room) {
+        setStatus('Missing host/port/room', 'error');
+        return;
+      }
+      if (!isStrongRoomCode(room)) {
+        if (mode === 'create') {
+          setStatus('Room code too weak', 'error');
+          addSystem('Please use 4+ random words or 16+ mixed characters.');
+          return;
+        } else {
+          addSystem('Room code looks weak; continuing because this is a join request.');
+        }
+      }
+
+      try {
+        await ensureAuth(room, name, { auto, mode, preferRegister });
+      } catch (err) {
+        showLoading(false);
+        setStatus(err.message || 'Authentication failed', 'error');
+        return;
+      }
+
+      // Preserve auth results before resetting connection state.
+      const authToken = state.token;
+      const authIsAdmin = state.isAdmin;
+
+      setStatus('Deriving key…');
+      let kdf;
+      try {
+        kdf = await deriveRoomKey(room);
+      } catch (err) {
+        setStatus('Key derivation failed', 'error');
+        addSystem(err.message);
+        return;
+      }
+
+      resetState();
+      state.token = authToken;
+      state.isAdmin = authIsAdmin;
+      state.key = kdf.cryptoKey;
+      state.keyBytes = kdf.keyBytes;
+      state.username = name;
+      state.roomCode = room;
+      state.sendCounter = loadSendCounter(room, name);
+      fingerprintEl.textContent = `Fingerprint: ${kdf.fingerprint}`;
+      setStatus('Connecting…');
+
+      if (!state.token) {
+        setStatus('Missing token after auth', 'error');
+        showLoading(false);
+        return;
+      }
+
+      const wsBase = getWsBase();
+      const sep = wsBase.includes('?') ? '&' : '?';
+      const ws = new WebSocket(`${wsBase}${sep}token=${encodeURIComponent(state.token)}`);
+      state.ws = ws;
+
+      ws.onopen = () => {
+        showLoading(false);
+        setStatus('Connected · E2E enabled', 'connected');
+        addSystem(`Joined room '${room}' as ${name}.`);
+        addSystem(`Verify fingerprint matches: ${kdf.fingerprint}`);
+        showChatOnly();
+        setAdminUI();
+      };
+
+      ws.onmessage = async (event) => {
+        if (!state.key) return;
+        const token = (typeof event.data === 'string') ? event.data.trim() : '';
+        if (!token) return;
+        try {
+          const { sender, counter, plaintext } = await decryptMessage(state.key, token);
+          const nonceKey = `${counter}:${token.slice(0, 12)}`;
+          const seen = state.recvSeen.get(sender) || [];
+          if (seen.includes(nonceKey)) return; // drop duplicate
+          if (seen.length > 50) seen.shift();
+          seen.push(nonceKey);
+          state.recvSeen.set(sender, seen);
+
+          let msgBody = plaintext;
+          let ts = '';
+          if (plaintext.startsWith('[') && plaintext.indexOf(']') > 0) {
+            const end = plaintext.indexOf(']');
+            ts = plaintext.slice(1, end);
+            const remainder = plaintext.slice(end + 2);
+            const split = remainder.split(':', 2);
+            if (split.length === 2) {
+              msgBody = split[1].trim();
+            }
+          }
+          addBubble(msgBody, `${sender} • ${ts}`, false);
+        } catch (err) {
+          // Ignore malformed/unauthenticated tokens
+        }
+      };
+
+      ws.onclose = () => {
+        setStatus('Disconnected', '');
+        addSystem('Connection closed.');
+        showLoading(false);
+      };
+
+      ws.onerror = () => {
+        setStatus('WebSocket error', 'error');
+        showLoading(false);
+      };
+    }
+
+    async function sendMessage() {
+      if (!state.ws || state.ws.readyState !== WebSocket.OPEN || !state.key) {
+        setStatus('Not connected', 'error');
+        return;
+      }
+      const msg = messageInput.value.trim();
+      if (!msg) return;
+      const ts = new Date();
+      const hhmm = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const full = `[${hhmm}] ${state.username}: ${msg}`;
+      try {
+        state.sendCounter += 1;
+        persistSendCounter(state.roomCode, state.username, state.sendCounter);
+        const token = await encryptMessage(state.key, state.username, state.sendCounter, full);
+        state.ws.send(token);
+        addBubble(msg, `${state.username} • ${hhmm}`, true);
+        messageInput.value = '';
+      } catch (err) {
+        setStatus('Send failed', 'error');
+        addSystem(err.message);
+      }
+    }
+
+    connectBtn.addEventListener('click', () => {
+      const mode = currentMode || 'create';
+      const preferRegister = mode === 'create';
+      connect(false, { modeOverride: mode, preferRegister });
+    });
+    disconnectBtn.addEventListener('click', () => {
+      resetState();
+      setStatus('Disconnected', '');
+    });
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    btnCreate.addEventListener('click', showCreate);
+    btnJoin.addEventListener('click', showJoinStart);
+    btnJoinScan.addEventListener('click', showJoinScan);
+    joinRoomNext.addEventListener('click', handleJoinRoomContinue);
+    joinUserNext.addEventListener('click', handleJoinUserContinue);
+    joinUserBack.addEventListener('click', () => {
+      joinStepUser.style.display = 'none';
+      joinStepRoom.style.display = 'block';
+      setStatus('Enter the room code to join.');
+    });
+    lockBtn.addEventListener('click', toggleLock);
+    cancelScanBtn.addEventListener('click', () => { stopQrScan(); scanOverlay.style.display = 'none'; showJoinStart(); });
+    window.addEventListener('beforeunload', stopQrScan);
+
+    addSystem('Ready. Choose Create or Join to begin.');
+  </script>
+</body>
+</html>
