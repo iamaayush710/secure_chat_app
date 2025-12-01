@@ -53,11 +53,20 @@ class SecureChatClient:
 
         # ================= 2. Room code -> key (enforce strength) =================
         while True:
-            room = simpledialog.askstring(
-                "Secure Room",
-                "Enter secure room code (use 4+ words OR 16+ mixed chars):",
-                parent=self.master
-            )
+            try:
+                room = simpledialog.askstring(
+                    "Secure Room",
+                    "Enter secure room code (use 4+ words OR 16+ mixed chars):",
+                    parent=self.master
+                )
+            except tk.TclError:
+                # Window got destroyed (e.g., missing display or closed early)
+                try:
+                    self.master.destroy()
+                except Exception:
+                    pass
+                return
+
             if not room:
                 continue
             if is_strong_room_code(room):
