@@ -87,6 +87,97 @@
       letter-spacing: 0.4px;
     }
 
+    .roster {
+      margin-top: 8px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-2);
+      max-height: calc(100vh - 220px);
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .roster-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 14px;
+    }
+
+    .roster-item:last-child {
+      border-bottom: none;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--muted);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.04);
+    }
+
+    .dot.online {
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(34,197,94,0.18);
+    }
+
+    #rosterSidebar {
+      border-left: 1px solid var(--border);
+      border-right: none;
+    }
+
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 10px 14px;
+      background: rgba(5, 9, 21, 0.95);
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      gap: 10px;
+      z-index: 20;
+    }
+
+    .mobile-nav button {
+      flex: 1;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-weight: 600;
+    }
+
+    .mobile-nav button.active {
+      border-color: rgba(34,197,94,0.5);
+      box-shadow: 0 6px 18px rgba(34,197,94,0.15);
+      color: var(--accent);
+    }
+
+    @media (max-width: 900px) {
+      body { padding-bottom: 68px; overflow: hidden; }
+      .grid { grid-template-columns: 1fr !important; }
+      #rosterSidebar {
+        position: fixed;
+        inset: 12px 12px 72px 12px;
+        max-width: none;
+        display: none;
+        z-index: 15;
+        border-left: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 14px 40px rgba(0,0,0,0.45);
+      }
+      #rosterSidebar.open { display: block; }
+      .main { padding-bottom: 70px; }
+      .mobile-nav { display: flex; }
+      .messages { max-height: calc(100vh - 260px); }
+    }
+
     label {
       font-size: 13px;
       color: var(--muted);
@@ -366,7 +457,7 @@
           <button class="button secondary" id="disconnectBtn">Disconnect</button>
         </div>
         <div class="footnote">
-          Keep this page local or serve it over HTTPS. The relay sees only ciphertext tokens.
+      Keep this page local or serve it over HTTPS. The relay sees only ciphertext tokens.
         </div>
       </aside>
 
@@ -384,6 +475,18 @@
           Security design: scrypt(room_code) → AES-256-GCM key · header binds sender + counter + nonce · per-sender replay protection.
         </div>
       </main>
+
+      <aside class="panel" id="rosterSidebar" style="display:none; border-left:1px solid var(--border);">
+        <h2 style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+          Members
+          <span style="font-size:11px; color:var(--muted); text-transform:none;">(joined + online)</span>
+        </h2>
+        <div class="roster" id="rosterList"></div>
+      </aside>
+    </div>
+    <div class="mobile-nav" id="mobileNav">
+      <button id="navChat" class="active">Chat</button>
+      <button id="navMembers">Members</button>
     </div>
 
     <div class="overlay" id="scanOverlay">
@@ -420,6 +523,7 @@
       token: null,
       isAdmin: false,
       locked: false,
+      roster: [],
     };
 
     const statusEl = document.getElementById('status');
@@ -454,13 +558,19 @@
     const lockBtn = document.getElementById('lockBtn');
     const qrVideo = document.getElementById('qrVideo');
     const sidebar = document.getElementById('sidebar');
+    const rosterSidebar = document.getElementById('rosterSidebar');
     const scanOverlay = document.getElementById('scanOverlay');
     const cancelScanBtn = document.getElementById('cancelScanBtn');
     const loadingOverlay = document.getElementById('loadingOverlay');
+    const rosterList = document.getElementById('rosterList');
+    const mobileNav = document.getElementById('mobileNav');
+    const navChat = document.getElementById('navChat');
+    const navMembers = document.getElementById('navMembers');
     let qrScanner = null;
     let currentMode = null; // "create" | "join"
     let pendingJoinRoom = "";
     let pendingJoinUsername = "";
+    let rosterOpenMobile = false;
 
     function setStatus(text, cls = '') {
       statusEl.textContent = text;
@@ -483,6 +593,27 @@
       wrap.innerHTML = `<div style="color:var(--muted);font-size:13px;">${text}</div>`;
       messagesEl.appendChild(wrap);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function renderRoster() {
+      rosterList.innerHTML = '';
+      if (!state.roster.length) {
+        const empty = document.createElement('div');
+        empty.style.color = 'var(--muted)';
+        empty.style.fontSize = '13px';
+        empty.textContent = 'No members yet.';
+        rosterList.appendChild(empty);
+        return;
+      }
+      state.roster.forEach((u) => {
+        const item = document.createElement('div');
+        item.className = 'roster-item';
+        const safeName = (u && u.name) ? u.name : '';
+        const online = !!(u && u.online);
+        item.innerHTML = `<span class="dot ${online ? 'online' : ''}"></span><span>${safeName}</span>`;
+        rosterList.appendChild(item);
+      });
+      updateLayoutForViewport();
     }
 
     function isStrongRoomCode(room) {
@@ -670,14 +801,29 @@
       // state.token = null;
       // state.isAdmin = false;
       state.locked = false;
+      state.roster = [];
+      rosterOpenMobile = false;
+      renderRoster();
+    }
+
+    function showConnectPanel() {
+      landing.style.display = 'none';
+      joinWizard.style.display = 'none';
+      scanOverlay.style.display = 'none';
+      appGrid.style.display = 'grid';
+      appGrid.style.gridTemplateColumns = '320px 1fr';
+      sidebar.style.display = 'block';
+      rosterSidebar.style.display = 'none';
+      rosterOpenMobile = false;
+      navChat.classList.add('active');
+      navMembers.classList.remove('active');
+      updateLayoutForViewport();
+      renderRoster();
     }
 
     function showCreate() {
       currentMode = 'create';
-      landing.style.display = 'none';
-      joinWizard.style.display = 'none';
-      appGrid.style.display = 'grid';
-      sidebar.style.display = 'block';
+      showConnectPanel();
       formTitle.textContent = 'Create Room';
       setStatus('Fill the form to create a room.');
       addSystem('Mode: create a new room and share the code.');
@@ -694,6 +840,14 @@
       joinUserHint.textContent = 'We will check availability, then ask for your passkey (biometric if available, password/PIN otherwise).';
       joinStepRoom.style.display = 'block';
       joinStepUser.style.display = 'none';
+      sidebar.style.display = 'block';
+      rosterSidebar.style.display = 'none';
+      appGrid.style.gridTemplateColumns = '320px 1fr';
+      rosterOpenMobile = false;
+      updateLayoutForViewport();
+      navChat.classList.add('active');
+      navMembers.classList.remove('active');
+      renderRoster();
     }
 
     function showJoinStart() {
@@ -986,14 +1140,44 @@
       loadingOverlay.style.display = show ? 'flex' : 'none';
     }
 
+    function isMobile() {
+      return window.innerWidth <= 900;
+    }
+
+    function updateLayoutForViewport() {
+      const mobile = isMobile();
+      const connectedView = sidebar.style.display === 'none';
+      mobileNav.style.display = connectedView && mobile ? 'flex' : 'none';
+
+      if (connectedView) {
+        appGrid.style.gridTemplateColumns = mobile ? '1fr' : '1fr 260px';
+        rosterSidebar.style.display = mobile ? (rosterOpenMobile ? 'block' : 'none') : 'block';
+        rosterSidebar.classList.toggle('open', rosterOpenMobile && mobile);
+      } else {
+        appGrid.style.gridTemplateColumns = mobile ? '1fr' : '320px 1fr';
+        rosterSidebar.style.display = 'none';
+        rosterSidebar.classList.remove('open');
+      }
+
+      if (!mobile) {
+        navChat.classList.add('active');
+        navMembers.classList.remove('active');
+        rosterOpenMobile = false;
+      }
+    }
+
     function showChatOnly() {
       landing.style.display = 'none';
       joinWizard.style.display = 'none';
       scanOverlay.style.display = 'none';
       sidebar.style.display = 'none';
       appGrid.style.display = 'grid';
-      appGrid.style.gridTemplateColumns = '1fr';
+      rosterOpenMobile = false;
+      updateLayoutForViewport();
+      navChat.classList.add('active');
+      navMembers.classList.remove('active');
       setAdminUI();
+      renderRoster();
     }
 
     async function toggleLock() {
@@ -1084,15 +1268,32 @@
         addSystem(`Verify fingerprint matches: ${kdf.fingerprint}`);
         showChatOnly();
         setAdminUI();
+        state.roster = [{ name, online: true }];
+        renderRoster();
       };
 
       ws.onmessage = async (event) => {
+        const raw = (typeof event.data === 'string') ? event.data.trim() : '';
+        if (!raw) return;
+
+        // Handle presence payloads (unencrypted).
+        if (raw.startsWith('{')) {
+          try {
+            const obj = JSON.parse(raw);
+            if (obj && obj.type === 'presence' && obj.room === state.roomCode && Array.isArray(obj.users)) {
+              state.roster = obj.users.map((u) => ({ name: u.name, online: !!u.online }));
+              renderRoster();
+              return;
+            }
+          } catch (err) {
+            // fall through to token handling
+          }
+        }
+
         if (!state.key) return;
-        const token = (typeof event.data === 'string') ? event.data.trim() : '';
-        if (!token) return;
         try {
-          const { sender, counter, plaintext } = await decryptMessage(state.key, token);
-          const nonceKey = `${counter}:${token.slice(0, 12)}`;
+          const { sender, counter, plaintext } = await decryptMessage(state.key, raw);
+          const nonceKey = `${counter}:${raw.slice(0, 12)}`;
           const seen = state.recvSeen.get(sender) || [];
           if (seen.includes(nonceKey)) return; // drop duplicate
           if (seen.length > 50) seen.shift();
@@ -1120,6 +1321,7 @@
         setStatus('Disconnected', '');
         addSystem('Connection closed.');
         showLoading(false);
+        showConnectPanel();
       };
 
       ws.onerror = () => {
@@ -1159,6 +1361,7 @@
     disconnectBtn.addEventListener('click', () => {
       resetState();
       setStatus('Disconnected', '');
+      showConnectPanel();
     });
     sendBtn.addEventListener('click', sendMessage);
     messageInput.addEventListener('keydown', (e) => {
@@ -1166,6 +1369,20 @@
         e.preventDefault();
         sendMessage();
       }
+    });
+    window.addEventListener('resize', updateLayoutForViewport);
+
+    navChat.addEventListener('click', () => {
+      rosterOpenMobile = false;
+      navChat.classList.add('active');
+      navMembers.classList.remove('active');
+      updateLayoutForViewport();
+    });
+    navMembers.addEventListener('click', () => {
+      rosterOpenMobile = true;
+      navMembers.classList.add('active');
+      navChat.classList.remove('active');
+      updateLayoutForViewport();
     });
 
     btnCreate.addEventListener('click', showCreate);
@@ -1181,6 +1398,7 @@
     lockBtn.addEventListener('click', toggleLock);
     cancelScanBtn.addEventListener('click', () => { stopQrScan(); scanOverlay.style.display = 'none'; showJoinStart(); });
     window.addEventListener('beforeunload', stopQrScan);
+    updateLayoutForViewport();
 
     addSystem('Ready. Choose Create or Join to begin.');
   </script>

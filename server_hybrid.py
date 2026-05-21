@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import time
+import json
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Optional
 from urllib.parse import parse_qs, urlparse
@@ -47,6 +48,7 @@ class Session:
     send: Callable[[str], Awaitable[None]]
     close: Optional[Callable[[], Awaitable[None]]] = None
     room: Optional[str] = None
+    username: Optional[str] = None
     window_start: float = field(default_factory=time.time)
     sent_in_window: int = 0
 
@@ -57,6 +59,7 @@ mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client[DB_NAME]
 rooms = db.rooms
 messages = db.messages
+creds = db.credentials
 
 
 async def register_session(session: Session):
@@ -132,6 +135,36 @@ def _addr_str(peer) -> str:
         return str(peer)
 
 
+async def broadcast_presence(room: Optional[str]):
+    if not room:
+        return
+    try:
+        cred_docs = await creds.find({"room": room}, {"username": 1}).to_list(length=500)
+        registered = sorted({doc.get("username") for doc in cred_docs if doc.get("username")})
+    except Exception as e:
+        logging.warning(f"[PRESENCE] failed to fetch roster for {room}: {e}")
+        registered = []
+
+    async with sessions_lock:
+        room_sessions = [s for s in sessions if s.room == room]
+    online_users = {s.username for s in room_sessions if s.username}
+    all_users = sorted(set(registered) | online_users)
+    payload = json.dumps(
+        {
+            "type": "presence",
+            "room": room,
+            "users": [{"name": u, "online": u in online_users} for u in all_users],
+        }
+    )
+
+    for sess in room_sessions:
+        try:
+            await sess.send(payload)
+        except Exception as e:
+            logging.warning(f"[PRESENCE] failed send to {sess.addr}: {e}")
+            await unregister_session(sess)
+
+
 async def handle_tcp(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     peer = writer.get_extra_info("peername")
     addr = _addr_str(peer)
@@ -191,9 +224,16 @@ async def handle_ws(websocket: WebSocketServerProtocol, path: str):
         await websocket.close(code=4002, reason="invalid token")
         return
 
-    # Enforce lock for new joins
+    # Enforce lock: allow admins and previously-registered users to rejoin, block new users.
     room_doc = await rooms.find_one({"room": room}) if room else None
-    if room_doc and room_doc.get("locked") and not is_admin:
+    room_locked = bool(room_doc.get("locked")) if room_doc else False
+    user_exists = False
+    if room_locked and room and username:
+        try:
+            user_exists = bool(await creds.find_one({"room": room, "username": username}))
+        except Exception as e:
+            logging.warning(f"[LOCK CHECK] failed user lookup for {room}/{username}: {e}")
+    if room_locked and not (is_admin or user_exists):
         await websocket.close(code=4003, reason="room locked")
         return
 
@@ -206,7 +246,7 @@ async def handle_ws(websocket: WebSocketServerProtocol, path: str):
         except Exception:
             pass
 
-    session = Session(kind="ws", addr=f"{addr}|{room}|{username}", send=send_line, close=close, room=room)
+    session = Session(kind="ws", addr=f"{addr}|{room}|{username}", send=send_line, close=close, room=room, username=username)
     await register_session(session)
 
     # Send recent history for this room to the newly connected client.
@@ -217,6 +257,7 @@ async def handle_ws(websocket: WebSocketServerProtocol, path: str):
                 await send_line(doc["token"])
             except Exception:
                 break
+        await broadcast_presence(room)
 
     try:
         async for msg in websocket:
@@ -239,6 +280,8 @@ async def handle_ws(websocket: WebSocketServerProtocol, path: str):
         logging.error(f"[!] WS error with {addr}: {e}")
     finally:
         await unregister_session(session)
+        if room:
+            await broadcast_presence(room)
 
 
 async def main():
